@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>💑 CouplesBudget — Build Your Dream Together</title>
+    <meta name="description"
+        content="A fun, funky couple budgeting app for Canadians. Track income, expenses, loans, and project your financial future together." />
+    <link rel="stylesheet" href="style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+</head>
+
+<body>
+
+    <!-- ── LOGIN OVERLAY ─────────────────────────────────────────────── -->
+    <div id="loginOverlay" class="overlay-screen">
+        <div class="login-card">
+            <div style="text-align:center;margin-bottom:28px">
+                <div style="font-size:3.5rem;margin-bottom:8px">💑</div>
+                <h1
+                    style="font-size:1.8rem;font-weight:900;background:linear-gradient(135deg,var(--primary),var(--accent1));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">
+                    CouplesBudget</h1>
+                <p style="color:var(--text-muted);font-size:0.88rem;margin-top:4px">Your money, your story 🇨🇦</p>
+            </div>
+
+            <!-- Existing accounts -->
+            <div style="margin-bottom:24px">
+                <div
+                    style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:10px">
+                    Choose your profile</div>
+                <div id="loginUserList" style="display:flex;flex-direction:column;gap:8px"></div>
+            </div>
+
+            <!-- Sign In form -->
+            <div id="loginFormWrap">
+                <div class="login-divider">— or sign in manually —</div>
+                <form id="loginForm" style="margin-top:16px">
+                    <div class="form-group">
+                        <label class="form-label">Username</label>
+                        <input class="form-input" id="loginUsername" type="text" placeholder="e.g. smithfamily"
+                            autocomplete="username" required />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">PIN (4–6 digits)</label>
+                        <input class="form-input" id="loginPin" type="password" inputmode="numeric" placeholder="••••"
+                            maxlength="6" required />
+                    </div>
+                    <div id="loginError" class="login-error"></div>
+                    <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center">🔐 Sign
+                        In</button>
+                </form>
+                <p style="text-align:center;margin-top:16px;font-size:0.85rem;color:var(--text-muted)">
+                    New here? <button id="showCreateBtn" class="link-btn">Create an account →</button>
+                </p>
+            </div>
+
+            <!-- Create Account form -->
+            <div id="createFormWrap" style="display:none">
+                <div class="login-divider">— create your account —</div>
+                <form id="createAccountForm" style="margin-top:16px">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Username</label>
+                            <input class="form-input" id="caUsername" type="text" placeholder="e.g. smithfamily"
+                                required autocomplete="off" />
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Couple / Profile Name</label>
+                            <input class="form-input" id="caCoupleName" type="text" placeholder="e.g. The Smiths"
+                                required />
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Partner 1 Name</label>
+                            <input class="form-input" id="caP1Name" type="text" placeholder="e.g. Alex" />
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Partner 2 Name</label>
+                            <input class="form-input" id="caP2Name" type="text" placeholder="e.g. Jordan" />
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Choose PIN (4–6 digits)</label>
+                            <input class="form-input" id="caPin" type="password" inputmode="numeric" placeholder="••••"
+                                maxlength="6" required />
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Confirm PIN</label>
+                            <input class="form-input" id="caPinConfirm" type="password" inputmode="numeric"
+                                placeholder="••••" maxlength="6" required />
+                        </div>
+                    </div>
+                    <div id="createError" class="login-error"></div>
+                    <button type="submit" class="btn btn-success" style="width:100%;justify-content:center">✨ Create
+                        Account</button>
+                </form>
+                <p style="text-align:center;margin-top:16px;font-size:0.85rem;color:var(--text-muted)">
+                    Already have one? <button id="showLoginBtn" class="link-btn">Sign in →</button>
+                </p>
+            </div>
+
+            <p style="text-align:center;margin-top:24px;font-size:0.72rem;color:var(--text-muted);opacity:.6">
+                🔒 All data stays on this device only — nothing is sent anywhere.
+            </p>
+        </div>
+    </div>
+
+    <!-- ── ONBOARDING WIZARD ─────────────────────────────────────────── -->
+    <div id="onboardingOverlay" class="overlay-screen" style="display:none">
+        <div class="onboarding-card">
+            <!-- Progress dots -->
+            <div class="ob-dots">
+                <div class="ob-dot active"></div>
+                <div class="ob-dot"></div>
+                <div class="ob-dot"></div>
+            </div>
+
+            <!-- Step 1: Welcome -->
+            <div class="ob-step active" id="ob-step-1">
+                <div style="text-align:center;padding:20px 0">
+                    <div style="font-size:4rem;margin-bottom:12px">🎉</div>
+                    <h2 style="font-size:1.6rem;font-weight:900">Welcome, <span id="obCoupleName">Lovebirds</span>!</h2>
+                    <p style="color:var(--text-muted);margin-top:8px;font-size:0.95rem">Let's set up your financial home
+                        in 2 quick steps.</p>
+                    <div class="happy-banner" style="margin-top:20px;text-align:left">
+                        <span>💡</span>
+                        <span>
+                            <strong><span id="obP1">Partner 1</span></strong> & <strong><span id="obP2">Partner
+                                    2</span></strong> — one shared app, all your money goals together!
+                        </span>
+                    </div>
+                </div>
+                <div style="display:flex;justify-content:flex-end;margin-top:28px">
+                    <button id="obNext1" class="btn btn-primary">Next: Add Accounts →</button>
+                </div>
+            </div>
+
+            <!-- Step 2: Add Bank Accounts -->
+            <div class="ob-step" id="ob-step-2">
+                <h2 style="font-size:1.3rem;font-weight:800;margin-bottom:6px">🏦 Add your bank accounts</h2>
+                <p style="color:var(--text-muted);font-size:0.88rem;margin-bottom:20px">Enter current balances — you can
+                    always add more later.</p>
+                <div id="obAccounts"></div>
+                <button type="button" id="obAddAccBtn" class="btn btn-ghost btn-sm" style="margin-bottom:20px">➕ Add
+                    another account</button>
+                <div style="display:flex;justify-content:space-between;margin-top:8px">
+                    <button id="obPrev2" class="btn btn-ghost">← Back</button>
+                    <button id="obFinish" class="btn btn-success">🎉 Finish Setup</button>
+                </div>
+            </div>
+
+            <!-- Step 3: Done -->
+            <div class="ob-step" id="ob-step-3">
+                <div style="text-align:center;padding:30px 0">
+                    <div style="font-size:4rem;margin-bottom:16px">🚀</div>
+                    <h2 style="font-size:1.5rem;font-weight:900">You're all set!</h2>
+                    <p style="color:var(--text-muted);margin-top:8px">Your financial dashboard is ready. Let's build
+                        your future together ✨</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── MAIN APP WRAPPER ──────────────────────────────────────────── -->
+    <div id="appWrapper">
+
+        <!-- ── HEADER ─────────────────────────────────────────────────────── -->
+        <header class="top-header">
+            <div class="logo">
+                <div class="logo-icon">💑</div>
+                <div class="logo-text"><span>Couples</span>Budget</div>
+            </div>
+            <div class="header-date" id="headerDate"></div>
+            <div style="display:flex;align-items:center;gap:12px">
+                <div id="userBadge" class="user-badge"></div>
+                <div class="header-badge">🇨🇦 Canada Edition</div>
+            </div>
+        </header>
+
+        <!-- ── TABS ───────────────────────────────────────────────────────── -->
+        <nav class="nav-tabs">
+            <button class="tab-btn active" data-tab="tab-dashboard">🏡 Dashboard</button>
+            <button class="tab-btn" data-tab="tab-income">💼 Income</button>
+            <button class="tab-btn" data-tab="tab-expenses">🛒 Expenses</button>
+            <button class="tab-btn" data-tab="tab-loans">🏦 Loans</button>
+            <button class="tab-btn" data-tab="tab-accounts">💳 Accounts</button>
+            <button class="tab-btn" data-tab="tab-projections">📈 Projections</button>
+            <button class="tab-btn" data-tab="tab-simulator">🔮 Simulator</button>
+            <button class="tab-btn" data-tab="tab-checkins">📍 Check-Ins</button>
+            <button class="tab-btn" data-tab="tab-advice">💡 Advice</button>
+        </nav>
+
+        <main class="main">
+
+            <!-- ════════════════════════════════════════════════════════════════
+         TAB 1 — DASHBOARD
+    ═══════════════════════════════════════════════════════════════════ -->
+            <section class="tab-panel active" id="tab-dashboard">
+                <div class="page-header">
+                    <h2>🏡 Your Money Dashboard</h2>
+                    <p>A snapshot of your couple's financial health — updated in real-time ✨</p>
+                </div>
+
+                <div class="happy-banner">
+                    <span class="cheer">🌈</span>
+                    <span id="dashCheer">You two are building something amazing together!</span>
+                </div>
+
+                <div class="cards-grid" style="grid-template-columns: repeat(auto-fill, minmax(180px, 1fr))">
+                    <div class="stat-card purple">
+                        <div class="stat-icon">💰</div>
+                        <div class="stat-label">Monthly Income</div>
+                        <div class="stat-value purple" id="dashIncome">$0</div>
+                        <div class="stat-sub">Combined</div>
+                    </div>
+                    <div class="stat-card orange">
+                        <div class="stat-icon">💸</div>
+                        <div class="stat-label">Monthly Outflow</div>
+                        <div class="stat-value" style="color:var(--accent5)" id="dashExpenses">$0</div>
+                        <div class="stat-sub">Expenses + Loans</div>
+                    </div>
+                    <div class="stat-card green">
+                        <div class="stat-icon">🌱</div>
+                        <div class="stat-label">Monthly Net</div>
+                        <div class="stat-value positive" id="dashNet">$0</div>
+                        <div class="stat-sub">After all costs</div>
+                    </div>
+                    <div class="stat-card pink">
+                        <div class="stat-icon">📊</div>
+                        <div class="stat-label">Savings Rate</div>
+                        <div class="stat-value" style="color:var(--accent1)" id="dashSavingsRate">0%</div>
+                        <div class="stat-sub">Goal: 20%+</div>
+                    </div>
+                    <div class="stat-card blue">
+                        <div class="stat-icon">🎯</div>
+                        <div class="stat-label">Annual Savings</div>
+                        <div class="stat-value" style="color:var(--accent4)" id="dashAnnual">$0</div>
+                        <div class="stat-sub">If consistent</div>
+                    </div>
+                    <div class="stat-card purple">
+                        <div class="stat-icon">🏗️</div>
+                        <div class="stat-label">Total Debt</div>
+                        <div class="stat-value" style="color:var(--danger)" id="dashDebt">$0</div>
+                        <div class="stat-sub">All loans combined</div>
+                    </div>
+                    <div class="stat-card blue">
+                        <div class="stat-icon">🏦</div>
+                        <div class="stat-label">Total Cash & Accounts</div>
+                        <div class="stat-value" style="color:var(--accent4)" id="dashCash">$0</div>
+                        <div class="stat-sub">All bank accounts</div>
+                    </div>
+                    <div class="stat-card green">
+                        <div class="stat-icon">🌟</div>
+                        <div class="stat-label">Net Worth Today</div>
+                        <div class="stat-value positive" id="dashNetWorthNow">$0</div>
+                        <div class="stat-sub">Cash + equity now</div>
+                    </div>
+                </div>
+
+                <div class="two-col">
+                    <div class="card">
+                        <div class="card-title">📊 Top Spending Categories</div>
+                        <div id="dashTopExpenses">
+                            <p class="text-muted text-sm">Add expenses to see breakdown 👆</p>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">🚀 Quick Tips</div>
+                        <div style="display:flex;flex-direction:column;gap:12px">
+                            <div class="happy-banner" style="padding:12px;margin:0">
+                                <span>💡</span>
+                                <span class="text-sm">Fill in all tabs to unlock full projections and personalized
+                                    advice!</span>
+                            </div>
+                            <div class="happy-banner"
+                                style="padding:12px;margin:0;background:linear-gradient(135deg,rgba(52,211,153,0.12),rgba(96,165,250,0.12));border-color:rgba(52,211,153,0.25)">
+                                <span>🇨🇦</span>
+                                <span class="text-sm">Max your TFSA ($7,000/yr each) before investing in non-registered
+                                    accounts.</span>
+                            </div>
+                            <div class="happy-banner"
+                                style="padding:12px;margin:0;background:linear-gradient(135deg,rgba(251,191,36,0.12),rgba(251,146,60,0.12));border-color:rgba(251,191,36,0.25)">
+                                <span>🎯</span>
+                                <span class="text-sm">Bi-weekly mortgage payments can cut your amortization by
+                                    years!</span>
+                            </div>
+                            <div class="happy-banner"
+                                style="padding:12px;margin:0;background:linear-gradient(135deg,rgba(244,114,182,0.12),rgba(167,139,250,0.12));border-color:rgba(244,114,182,0.25)">
+                                <span>💑</span>
+                                <span class="text-sm">Schedule a monthly money date — the best couple activity!</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ════════════════════════════════════════════════════════════════
+         TAB 2 — INCOME
+    ═══════════════════════════════════════════════════════════════════ -->
+            <section class="tab-panel" id="tab-income">
+                <div class="page-header">
+                    <h2>💼 Monthly Income</h2>
+                    <p>Enter each partner's take-home pay (after tax). Income changes are tracked automatically 📝</p>
+                </div>
+
+                <div class="cards-grid" style="grid-template-columns:1fr 1fr 1fr;margin-bottom:24px">
+                    <div class="stat-card purple" id="incomeP1Card">
+                        <div class="stat-icon">💼</div>
+                        <div class="stat-label">Partner 1</div>
+                        <div class="stat-value purple">$0</div>
+                        <div class="stat-sub">per month</div>
+                    </div>
+                    <div class="stat-card pink" id="incomeP2Card">
+                        <div class="stat-icon">💼</div>
+                        <div class="stat-label">Partner 2</div>
+                        <div class="stat-value purple">$0</div>
+                        <div class="stat-sub">per month</div>
+                    </div>
+                    <div class="stat-card green" id="incomeTotalCard">
+                        <div class="stat-icon">🏦</div>
+                        <div class="stat-label">Combined</div>
+                        <div class="stat-value positive">$0</div>
+                        <div class="stat-sub">per month</div>
+                    </div>
+                </div>
+
+                <div class="two-col">
+                    <div class="card">
+                        <div class="card-title">✏️ Update Income</div>
+                        <form id="incomeForm">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label">Partner 1 Name</label>
+                                    <input class="form-input" id="p1Name" placeholder="e.g. Alex" type="text" />
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Partner 1 Monthly Take-Home (CA$)</label>
+                                    <input class="form-input" id="p1Amount" placeholder="e.g. 4500" type="number"
+                                        min="0" step="50" />
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label">Partner 2 Name</label>
+                                    <input class="form-input" id="p2Name" placeholder="e.g. Jordan" type="text" />
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Partner 2 Monthly Take-Home (CA$)</label>
+                                    <input class="form-input" id="p2Amount" placeholder="e.g. 3800" type="number"
+                                        min="0" step="50" />
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-success" style="width:100%">
+                                🎉 Save Income
+                            </button>
+                        </form>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">💡 Income Tips</div>
+                        <div style="display:flex;flex-direction:column;gap:12px">
+                            <div class="happy-banner" style="padding:12px;margin:0">
+                                <span>🧮</span>
+                                <span class="text-sm">Use after-tax take-home pay for accurate budgeting. Don't forget
+                                    bonuses — add them to savings goals!</span>
+                            </div>
+                            <div class="happy-banner"
+                                style="padding:12px;margin:0;background:linear-gradient(135deg,rgba(52,211,153,0.12),rgba(96,165,250,0.12));border-color:rgba(52,211,153,0.25)">
+                                <span>∷</span>
+                                <span class="text-sm">Consider contributing to workplace RRSP matching programs first —
+                                    it's free money!</span>
+                            </div>
+                            <div class="happy-banner"
+                                style="padding:12px;margin:0;background:linear-gradient(135deg,rgba(251,191,36,0.12),rgba(251,146,60,0.12));border-color:rgba(251,191,36,0.25)">
+                                <span>📆</span>
+                                <span class="text-sm">Update income whenever there's a raise or change — history is
+                                    auto-tracked below!</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="history-section">
+                    <button class="history-toggle" id="incomeHistoryToggle">
+                        🕐 Income Change History <span class="toggle-arrow">▼</span>
+                    </button>
+                    <div class="history-list" id="incomeHistoryList"></div>
+                </div>
+            </section>
+
+            <!-- ════════════════════════════════════════════════════════════════
+         TAB 3 — EXPENSES
+    ═══════════════════════════════════════════════════════════════════ -->
+            <section class="tab-panel" id="tab-expenses">
+                <div class="page-header">
+                    <h2>🛒 Monthly Expenses</h2>
+                    <p>Top 10 categories for Canadian condo-living couples. Every change is logged! 🇨🇦</p>
+                </div>
+
+                <div class="cards-grid" style="grid-template-columns:1fr 1fr;margin-bottom:24px">
+                    <div class="stat-card orange" id="expenseTotalCard">
+                        <div class="stat-icon">💸</div>
+                        <div class="stat-label">Monthly Expenses</div>
+                        <div class="stat-value" style="color:var(--accent5)">$0</div>
+                        <div class="stat-sub">Total all categories</div>
+                    </div>
+                    <div class="stat-card green" id="expenseSavingsCard">
+                        <div class="stat-icon">🌱</div>
+                        <div class="stat-label">Savings Rate</div>
+                        <div class="stat-value positive">0%</div>
+                        <div class="stat-sub">Goal: 20%+</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">📋 Expense Categories — tap to update any amount</div>
+                    <div id="expenseList"></div>
+                    <div
+                        style="margin-top:16px;padding:14px;background:rgba(167,139,250,0.08);border-radius:10px;font-size:0.82rem;color:var(--text-muted)">
+                        💾 Changes are auto-saved when you tab out of each field. All updates are logged with
+                        timestamps!
+                    </div>
+                </div>
+
+                <div class="history-section">
+                    <button class="history-toggle" id="expenseHistoryToggle">
+                        🕐 Expense Change History <span class="toggle-arrow">▼</span>
+                    </button>
+                    <div class="history-list" id="expenseHistoryList"></div>
+                </div>
+            </section>
+
+            <!-- ════════════════════════════════════════════════════════════════
+         TAB 4 — LOANS
+    ═══════════════════════════════════════════════════════════════════ -->
+            <section class="tab-panel" id="tab-loans">
+                <div class="page-header">
+                    <h2>🏦 Loans & Mortgage</h2>
+                    <p>Track your mortgage, car loans, HELOC, student debt — all in one gorgeous place 💪</p>
+                </div>
+
+                <div class="cards-grid" style="grid-template-columns:1fr 1fr;margin-bottom:24px">
+                    <div class="stat-card purple">
+                        <div class="stat-icon">🏗️</div>
+                        <div class="stat-label">Total Debt</div>
+                        <div class="stat-value" style="color:var(--danger)" id="loanSummaryDebt">$0</div>
+                        <div class="stat-sub">All loans combined</div>
+                    </div>
+                    <div class="stat-card pink">
+                        <div class="stat-icon">📅</div>
+                        <div class="stat-label">Monthly Payments</div>
+                        <div class="stat-value purple" id="loanSummaryPayment">$0</div>
+                        <div class="stat-sub">Total loan payments</div>
+                    </div>
+                </div>
+
+                <div style="margin-bottom:20px">
+                    <button class="btn btn-primary" id="addLoanBtn">➕ Add Loan</button>
+                </div>
+
+                <!-- Add Loan Form -->
+                <div id="loanFormWrap" style="display:none;margin-bottom:24px">
+                    <div class="card">
+                        <div class="card-title">➕ Add New Loan</div>
+                        <form id="addLoanForm">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label">Loan Type</label>
+                                    <select class="form-select" id="loanType">
+                                        <option value="mortgage">🏠 Mortgage</option>
+                                        <option value="car">🚗 Car Loan</option>
+                                        <option value="personal">💳 Personal Loan</option>
+                                        <option value="heloc">🏗️ HELOC</option>
+                                        <option value="student">🎓 Student Loan</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Loan Name / Label</label>
+                                    <input class="form-input" id="loanName" placeholder="e.g. Scotiabank Mortgage"
+                                        required type="text" />
+                                </div>
+                            </div>
+                            <div class="form-row three">
+                                <div class="form-group">
+                                    <label class="form-label">Outstanding Balance (CA$)</label>
+                                    <input class="form-input" id="loanBalance" placeholder="e.g. 580000" type="number"
+                                        min="0" required />
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Annual Interest Rate (%)</label>
+                                    <input class="form-input" id="loanRate" placeholder="e.g. 4.79" type="number"
+                                        step="0.01" min="0" required />
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Monthly Payment (CA$)</label>
+                                    <input class="form-input" id="loanMonthly" placeholder="e.g. 2800" type="number"
+                                        min="0" required />
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label">Term (years)</label>
+                                    <input class="form-input" id="loanTerm" placeholder="e.g. 5" type="number"
+                                        min="0" />
+                                </div>
+                            </div>
+
+                            <!-- Mortgage-specific fields -->
+                            <div id="mortgageFields" style="display:none">
+                                <div class="divider"></div>
+                                <div class="card-title" style="margin-bottom:14px">🏠 Mortgage Details</div>
+                                <div class="form-row three">
+                                    <div class="form-group">
+                                        <label class="form-label">Purchase Price (CA$)</label>
+                                        <input class="form-input" id="purchasePrice" placeholder="e.g. 750000"
+                                            type="number" min="0" />
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Amortization (years)</label>
+                                        <input class="form-input" id="amortization" placeholder="25" type="number"
+                                            min="1" max="30" />
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Payment Frequency</label>
+                                        <select class="form-select" id="paymentFreq">
+                                            <option value="Monthly">Monthly</option>
+                                            <option value="Bi-Weekly">Bi-Weekly</option>
+                                            <option value="Accelerated Bi-Weekly">Accelerated Bi-Weekly</option>
+                                            <option value="Weekly">Weekly</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style="display:flex;gap:10px;margin-top:8px">
+                                <button type="submit" class="btn btn-success">✅ Add Loan</button>
+                                <button type="button" class="btn btn-ghost" id="cancelLoanBtn">✕ Cancel</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div id="loanList"></div>
+            </section>
+
+            <!-- ════════════════════════════════════════════════════════════════
+         TAB 5 — PROJECTIONS
+    ═══════════════════════════════════════════════════════════════════ -->
+            <section class="tab-panel" id="tab-projections">
+                <div class="page-header">
+                    <h2>📈 7-Year Financial Projections</h2>
+                    <p>See where your money is headed — net worth, savings & debt over 7 years 🚀</p>
+                </div>
+
+                <div class="happy-banner">
+                    <span class="cheer">🔮</span>
+                    <span>Assumes 2.5% annual expense inflation · 5% investment return · based on your current
+                        data</span>
+                </div>
+
+                <div class="card">
+                    <div class="chart-filter-bar">
+                        <span style="font-weight:700;color:var(--text-muted)">View:</span>
+                        <button class="filter-btn active" data-view="yearly">📅 Yearly</button>
+                        <button class="filter-btn" data-view="monthly">📆 Monthly</button>
+                        <input type="hidden" id="projFilter" value="yearly" />
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="projChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="cards-grid" style="margin-top:20px">
+                    <div class="stat-card purple">
+                        <div class="stat-icon">📊</div>
+                        <div class="stat-label">Assumption</div>
+                        <div class="stat-value" style="font-size:1.2rem;color:var(--primary)">5% Return</div>
+                        <div class="stat-sub">Annual investment return</div>
+                    </div>
+                    <div class="stat-card orange">
+                        <div class="stat-icon">📉</div>
+                        <div class="stat-label">Inflation</div>
+                        <div class="stat-value" style="font-size:1.2rem;color:var(--accent5)">2.5% / yr</div>
+                        <div class="stat-sub">Applied to expenses</div>
+                    </div>
+                    <div class="stat-card green">
+                        <div class="stat-icon">🏠</div>
+                        <div class="stat-label">Property Growth</div>
+                        <div class="stat-value" style="font-size:1.2rem;color:var(--accent2)">2.5% / yr</div>
+                        <div class="stat-sub">Estimated value increase</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ════════════════════════════════════════════════════════════════
+         TAB 6 — SCENARIO SIMULATOR
+    ═══════════════════════════════════════════════════════════════════ -->
+            <section class="tab-panel" id="tab-simulator">
+                <div class="page-header">
+                    <h2>🔮 Scenario Simulator</h2>
+                    <p>Play with different life scenarios! Adjust sliders and see your net worth change instantly 🎮</p>
+                </div>
+
+                <div class="happy-banner">
+                    <span class="cheer">🧪</span>
+                    <span>This is a sandbox — changes here don't affect your real data. Dream away! 💫</span>
+                </div>
+
+                <div class="two-col">
+                    <!-- Sliders -->
+                    <div class="card">
+                        <div class="card-title">🎛️ Adjust Scenarios</div>
+
+                        <div class="slider-group">
+                            <div class="slider-label">📈 Income Change <span id="simIncomeDisplay">+0%</span></div>
+                            <input type="range" id="simIncome" min="-30" max="100" value="0" step="5" />
+                            <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px">Simulate a raise, job
+                                change, or one partner stopping work</div>
+                        </div>
+
+                        <div class="slider-group">
+                            <div class="slider-label">💸 Expense Change <span id="simExpenseDisplay">+0%</span></div>
+                            <input type="range" id="simExpense" min="-40" max="60" value="0" step="5" />
+                            <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px">What if you cut
+                                subscriptions, moved, or had a baby?</div>
+                        </div>
+
+                        <div class="slider-group">
+                            <div class="slider-label">📊 Investment Return <span id="simReturnDisplay">5.0%</span></div>
+                            <input type="range" id="simReturn" min="-4" max="10" value="0" step="0.5" />
+                            <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px">Conservative (3%) to
+                                aggressive (10%+) investing</div>
+                        </div>
+
+                        <div class="slider-group">
+                            <div class="slider-label">➕ Extra Monthly Savings <span id="simExtraDisplay">$0</span></div>
+                            <input type="range" id="simExtra" min="0" max="3000" value="0" step="100" />
+                            <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px">Could you squeeze out
+                                an extra $500/month?</div>
+                        </div>
+
+                        <div
+                            style="margin-top:16px;padding:14px;background:rgba(167,139,250,0.08);border-radius:10px;font-size:0.82rem;color:var(--text-muted)">
+                            🎯 Try: +20% income, -10% expenses, 7% return → watch it compound!
+                        </div>
+                    </div>
+
+                    <!-- Results -->
+                    <div>
+                        <div style="display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:20px">
+                            <div class="sim-result-card y1">
+                                <div class="sim-year">📅 1 Year Net Worth</div>
+                                <div class="sim-value y1" id="sim1yr">$0</div>
+                                <div class="sim-label">Based on your scenario</div>
+                            </div>
+                            <div class="sim-result-card y3">
+                                <div class="sim-year">📅 3 Year Net Worth</div>
+                                <div class="sim-value y3" id="sim3yr">$0</div>
+                                <div class="sim-label">With compounding growth</div>
+                            </div>
+                            <div class="sim-result-card y5">
+                                <div class="sim-year">📅 5 Year Net Worth</div>
+                                <div class="sim-value y5" id="sim5yr">$0</div>
+                                <div class="sim-label">Your wealth potential</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Simulator chart -->
+                <div class="card mt-6">
+                    <div class="card-title">📊 Net Worth at Each Milestone</div>
+                    <div class="chart-container" style="height:260px">
+                        <canvas id="simChart"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ════════════════════════════════════════════════════════════════
+         TAB 7 — ADVICE
+    ═══════════════════════════════════════════════════════════════════ -->
+            <section class="tab-panel" id="tab-advice">
+                <div class="page-header">
+                    <h2>💡 Personalized Money Advice</h2>
+                    <p>Based on your data — smart, tailored tips to maximize your financial happiness 🇨🇦</p>
+                </div>
+
+                <div class="happy-banner">
+                    <span class="cheer">🧠</span>
+                    <span>Your advice updates as you update your income and expenses. Always fresh! ✨</span>
+                </div>
+
+                <div id="adviceContainer">
+                    <div style="text-align:center;padding:40px;color:var(--text-muted)">
+                        <div style="font-size:3rem">💡</div>
+                        <p>Add your income and expenses first to unlock personalized advice!</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ════════════════════════════════════════════════════════════════
+         TAB 8 — BANK ACCOUNTS
+    ═══════════════════════════════════════════════════════════════════ -->
+            <section class="tab-panel" id="tab-accounts">
+                <div class="page-header">
+                    <h2>💳 Bank Accounts & Net Worth</h2>
+                    <p>Track all accounts in one place: chequing, savings, TFSA, RRSP, investments & more 🇨🇦</p>
+                </div>
+
+                <div class="cards-grid"
+                    style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr));margin-bottom:24px">
+                    <div class="stat-card blue">
+                        <div class="stat-icon">💰</div>
+                        <div class="stat-label">Total Cash & Investments</div>
+                        <div class="stat-value" style="color:var(--accent4)" id="accTotalCash">$0</div>
+                        <div class="stat-sub">All accounts combined</div>
+                    </div>
+                    <div class="stat-card green">
+                        <div class="stat-icon">🏠</div>
+                        <div class="stat-label">Property Equity</div>
+                        <div class="stat-value positive" id="accEquity">$0</div>
+                        <div class="stat-sub">From loans tab</div>
+                    </div>
+                    <div class="stat-card purple">
+                        <div class="stat-icon">🌟</div>
+                        <div class="stat-label">Net Worth TODAY</div>
+                        <div class="stat-value purple" id="accNetWorth">$0</div>
+                        <div class="stat-sub">Cash + equity</div>
+                    </div>
+                    <div class="stat-card pink">
+                        <div class="stat-icon">🏗️</div>
+                        <div class="stat-label">Total Debt</div>
+                        <div class="stat-value" style="color:var(--danger)" id="accTotalDebt">$0</div>
+                        <div class="stat-sub">All loans</div>
+                    </div>
+                </div>
+
+                <div style="margin-bottom:20px">
+                    <button class="btn btn-primary" id="addAccountBtn">➕ Add Account</button>
+                </div>
+
+                <div id="accountFormWrap" style="display:none;margin-bottom:24px">
+                    <div class="card">
+                        <div class="card-title">➕ Add Bank Account</div>
+                        <form id="addAccountForm">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label">Account Type</label>
+                                    <select class="form-select" id="accType">
+                                        <option value="chequing">🏦 Chequing Account</option>
+                                        <option value="savings">🐷 Savings Account</option>
+                                        <option value="tfsa">🍁 TFSA</option>
+                                        <option value="rrsp">🏔️ RRSP</option>
+                                        <option value="investment">📈 Investment / Brokerage</option>
+                                        <option value="emergency">🛡️ Emergency Fund</option>
+                                        <option value="hfsa">💊 Health Spending Account</option>
+                                        <option value="other">💳 Other / GIC / FHSA</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Account Name / Label</label>
+                                    <input class="form-input" id="accName" placeholder="e.g. TD TFSA" type="text" />
+                                </div>
+                            </div>
+                            <div class="form-row three">
+                                <div class="form-group">
+                                    <label class="form-label">Institution</label>
+                                    <input class="form-input" id="accInstitution" placeholder="e.g. TD, RBC, Questrade"
+                                        type="text" />
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Current Balance (CA$)</label>
+                                    <input class="form-input" id="accBalance" placeholder="e.g. 25000" type="number"
+                                        min="0" required />
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Owner</label>
+                                    <select class="form-select" id="accOwner">
+                                        <option value="Joint">Joint</option>
+                                        <option value="Partner 1">Partner 1</option>
+                                        <option value="Partner 2">Partner 2</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div style="display:flex;gap:10px">
+                                <button type="submit" class="btn btn-success">✅ Add Account</button>
+                                <button type="button" class="btn btn-ghost" id="cancelAccountBtn">✕ Cancel</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div id="accountList"></div>
+
+                <div class="history-section" style="margin-top:24px">
+                    <div class="card-title" style="margin-bottom:12px">🕐 Balance Change History</div>
+                    <div id="accountHistoryList"></div>
+                </div>
+            </section>
+
+            <!-- ════════════════════════════════════════════════════════════════
+         TAB 9 — CHECK-INS
+    ═══════════════════════════════════════════════════════════════════ -->
+            <section class="tab-panel" id="tab-checkins">
+                <div class="page-header">
+                    <h2>📍 Progress Check-Ins</h2>
+                    <p>Schedule future financial milestones and log actual vs projected — catch deviations early! 🎯</p>
+                </div>
+
+                <div class="happy-banner">
+                    <span class="cheer">📅</span>
+                    <span>6 milestones auto-generated from today! Log actuals at each date to see if you're ahead or
+                        behind — celebrate the wins! 🎉</span>
+                </div>
+
+                <div class="cards-grid" style="grid-template-columns:1fr 1fr 1fr;margin-bottom:24px">
+                    <div class="stat-card purple">
+                        <div class="stat-icon">🗓️</div>
+                        <div class="stat-label">Scheduled</div>
+                        <div class="stat-value purple" id="ciTotalScheduled">0</div>
+                        <div class="stat-sub">Total milestones</div>
+                    </div>
+                    <div class="stat-card green">
+                        <div class="stat-icon">✅</div>
+                        <div class="stat-label">Completed</div>
+                        <div class="stat-value positive" id="ciDone">0</div>
+                        <div class="stat-sub">Check-ins logged</div>
+                    </div>
+                    <div class="stat-card orange">
+                        <div class="stat-icon">⏳</div>
+                        <div class="stat-label">Upcoming</div>
+                        <div class="stat-value" style="color:var(--accent3)" id="ciUpcoming">0</div>
+                        <div class="stat-sub">Still ahead</div>
+                    </div>
+                </div>
+
+                <div style="margin-bottom:20px">
+                    <button class="btn btn-primary" id="addCheckInBtn">➕ Add Custom Check-In</button>
+                </div>
+
+                <div id="checkInFormWrap" style="display:none;margin-bottom:24px">
+                    <div class="card">
+                        <div class="card-title">📅 Schedule a Check-In</div>
+                        <form id="addCheckInForm">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label">Label</label>
+                                    <input class="form-input" id="ciLabel" placeholder="e.g. Summer 2027 Review"
+                                        required type="text" />
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Check-In Date</label>
+                                    <input class="form-input" id="ciDate" required type="date" />
+                                </div>
+                            </div>
+                            <div style="display:flex;gap:10px">
+                                <button type="submit" class="btn btn-success">✅ Schedule</button>
+                                <button type="button" class="btn btn-ghost" id="cancelCheckInBtn">✕ Cancel</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div id="checkInList"></div>
+
+                <div id="devChartWrap" style="display:none;margin-top:24px">
+                    <div class="card">
+                        <div class="card-title">📈 Projected vs Actual Net Worth</div>
+                        <div class="chart-container" style="height:280px">
+                            <canvas id="devChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+    </div><!-- /#appWrapper -->
+
+    <!-- Log Actual Modal -->
+    <div id="logActualModal"
+        style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;align-items:center;justify-content:center;backdrop-filter:blur(4px)">
+        <div
+            style="background:var(--surface);border:1px solid rgba(167,139,250,0.3);border-radius:20px;padding:28px;max-width:480px;width:90%;box-shadow:0 0 60px rgba(167,139,250,0.25)">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+                <div style="font-weight:800;font-size:1.15rem">📝 Log Actual Results</div>
+                <button id="modalCloseBtn"
+                    style="background:none;border:none;color:var(--text-muted);font-size:1.4rem;cursor:pointer;padding:4px">×</button>
+            </div>
+            <div style="font-size:0.85rem;color:var(--text-muted);margin-bottom:18px" id="logActualLabel"></div>
+            <form id="logActualForm">
+                <input type="hidden" id="logActualId" />
+                <div class="form-group" style="margin-bottom:14px">
+                    <label class="form-label">Actual Net Worth (CA$)</label>
+                    <input class="form-input" id="logNW" placeholder="e.g. 85000" type="number" min="0" required />
+                </div>
+                <div class="form-group" style="margin-bottom:14px">
+                    <label class="form-label">Actual Savings / Investments (CA$)</label>
+                    <input class="form-input" id="logSav" placeholder="e.g. 45000" type="number" min="0" />
+                </div>
+                <div class="form-group" style="margin-bottom:20px">
+                    <label class="form-label">Notes (optional)</label>
+                    <input class="form-input" id="logNotes" placeholder="e.g. Got a raise, cut subscriptions..."
+                        type="text" />
+                </div>
+                <button type="submit" class="btn btn-success" style="width:100%">🎉 Save Check-In Results</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast"></div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
