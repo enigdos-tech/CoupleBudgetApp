@@ -222,6 +222,18 @@ const ADVISOR_ENGINE = (() => {
             if (ctx.totalCash < 50000) return `A house in Canada usually needs a good down payment. You have ${fmt(ctx.totalCash)} right now—aiming for $50k-$100k would really help with those interest rates! 🏠`;
             return `With ${fmt(ctx.totalCash)} in the bank, you're in a strong position for a down payment! Remember to factor in closing costs and property taxes. 🏗️`;
         },
+        MORTGAGE_EXTRA: (ctx, extraAmount, isMonthly) => {
+            const loan = ctx.loans.find(l => l.type === 'mortgage');
+            if (!loan) return `I don't see a mortgage in your profile yet! Head to the Loans tab to add one so I can run these numbers for you. 🏠`;
+
+            const scheduleNormal = calculateAmortization(loan);
+            const scheduleExtra = calculateAmortization(loan, isMonthly ? extraAmount : 0, isMonthly ? 0 : extraAmount);
+
+            const savedInterest = scheduleNormal.reduce((a, s) => a + s.interest, 0) - scheduleExtra.reduce((a, s) => a + s.interest, 0);
+            const timeSaved = scheduleNormal.length - scheduleExtra.length;
+
+            return `Whoa! Paying an extra ${fmt(extraAmount)} ${isMonthly ? 'every month' : 'per year'} is a power move. 💥 You'd save roughly **${fmt(savedInterest)}** in interest and be debt-free **${timeSaved} periods** earlier!`;
+        },
         SAVINGS: (ctx, amount) => {
             const res = runSimulation({ income: 0, expense: 0, savings: amount, return: 0 }, 5);
             return `Squeezing out an extra ${fmt(amount)} a month is huge! 🏝️ Over 5 years, that extra discipline adds up to a projected net worth of ${fmt(res)}.`;
@@ -245,7 +257,16 @@ const ADVISOR_ENGINE = (() => {
             }
 
             if (q.includes('baby') || q.includes('child')) return RESPONSES.BABY(ctx);
-            if (q.includes('house') || q.includes('mortgage') || q.includes('home')) return RESPONSES.HOUSE(ctx);
+            if (q.includes('house') || q.includes('mortgage') || q.includes('home')) {
+                // Check if they are asking about extra payments
+                const extraMatch = q.match(/pay (\d+) extra (every year|per year|each year)/i);
+                if (extraMatch) return RESPONSES.MORTGAGE_EXTRA(ctx, parseInt(extraMatch[1]), false);
+
+                const extraMonthlyMatch = q.match(/pay (\d+) extra (every month|per month|each month)/i);
+                if (extraMonthlyMatch) return RESPONSES.MORTGAGE_EXTRA(ctx, parseInt(extraMonthlyMatch[1]), true);
+
+                return RESPONSES.HOUSE(ctx);
+            }
 
             const saveMatch = q.match(/save \$?(\d+)/i);
             if (saveMatch) return RESPONSES.SAVINGS(ctx, parseInt(saveMatch[1]));
@@ -628,6 +649,7 @@ function saveLoan(e) {
     };
     if (type === 'mortgage') {
         loan.purchasePrice = parseFloat(document.getElementById('purchasePrice').value) || 0;
+        loan.marketValue = parseFloat(document.getElementById('marketValue').value) || 0;
         loan.frequency = document.getElementById('paymentFreq').value;
         loan.amortization = parseInt(document.getElementById('amortization').value) || 25;
     }
@@ -642,6 +664,78 @@ function deleteLoan(id) {
     const loans = DB.get('loans', []).filter(l => l.id !== id);
     DB.set('loans', loans);
     renderLoanList();
+    document.getElementById('amortizationWrap').style.display = 'none';
+}
+
+function showAmortization(loanId) {
+    const loan = DB.get('loans', []).find(l => l.id === loanId);
+    if (!loan) return;
+
+    const schedule = calculateAmortization(loan);
+    const tbody = document.getElementById('amortTbody');
+    const wrap = document.getElementById('amortizationWrap');
+    const title = document.getElementById('amortTitle');
+
+    title.textContent = `📅 Amortization Schedule: ${loan.name}`;
+    tbody.innerHTML = schedule.map((s, i) => `
+        <tr>
+            <td>${i + 1}</td>
+            <td>${fmt(s.payment)}</td>
+            <td>${fmt(s.principal)}</td>
+            <td>${fmt(s.interest)}</td>
+            <td>${fmt(s.balance)}</td>
+        </tr>
+    `).join('');
+
+    wrap.style.display = 'block';
+    setTimeout(() => wrap.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+}
+
+function calculateAmortization(loan, extraMonthly = 0, lumpSumYearly = 0) {
+    const schedule = [];
+    let balance = loan.balance;
+    const annualRate = loan.rate / 100;
+
+    // Frequencies: Monthly=12, Bi-Weekly=26, Weekly=52
+    let periodsPerYear = 12;
+    let periodRate = annualRate / 12;
+    let payment = loan.monthly;
+
+    if (loan.frequency === 'Bi-Weekly') {
+        periodsPerYear = 26;
+        periodRate = annualRate / 26;
+        payment = (loan.monthly * 12) / 26;
+    } else if (loan.frequency === 'Accelerated Bi-Weekly') {
+        periodsPerYear = 26;
+        periodRate = annualRate / 26;
+        payment = loan.monthly / 2; // Paid 26 times
+    } else if (loan.frequency === 'Weekly') {
+        periodsPerYear = 52;
+        periodRate = annualRate / 52;
+        payment = (loan.monthly * 12) / 52;
+    }
+
+    const totalPeriods = (loan.amortization || 25) * periodsPerYear;
+
+    for (let p = 1; p <= totalPeriods; p++) {
+        if (balance <= 0) break;
+
+        const interest = balance * periodRate;
+        let pmt = payment + extraMonthly;
+        if (p % periodsPerYear === 0) pmt += lumpSumYearly;
+
+        let principal = Math.min(balance, pmt - interest);
+        if (principal < 0) principal = 0; // Negative amortization safeguard
+
+        balance -= principal;
+
+        // Only store first 60 periods (5 years) to keep UI clean, plus end state
+        if (p <= 60 || p % periodsPerYear === 0 || balance <= 0) {
+            schedule.push({ payment: principal + interest, principal, interest, balance });
+        }
+        if (balance <= 0) break;
+    }
+    return schedule;
 }
 
 function renderLoanList() {
@@ -675,7 +769,10 @@ function renderLoanList() {
             <span class="loan-type-badge ${badges[l.type] || 'badge-personal'}">${l.type.toUpperCase()}</span>
           </div>
         </div>
-        <button class="btn btn-danger btn-sm" onclick="deleteLoan(${l.id})">✕ Remove</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost btn-sm" onclick="showAmortization(${l.id})">📅 Schedule</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteLoan(${l.id})">✕</button>
+        </div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px">
         <div class="loan-stat"><div class="loan-stat-val" style="color:var(--danger)">${fmt(l.balance)}</div><div class="loan-stat-lbl">Balance</div></div>
@@ -688,15 +785,19 @@ function renderLoanList() {
         ${l.frequency ? `<div class="loan-stat"><div class="loan-stat-val" style="font-size:0.85rem">${l.frequency}</div><div class="loan-stat-lbl">Pay Frequency</div></div>` : ''}
       </div>
       ${l.purchasePrice ? `
-        <div class="loan-progress">
+        <div class="loan-progress" style="margin-top:15px">
           <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:0.78rem;color:var(--text-muted)">
-            <span>Equity built</span><span style="color:var(--accent2)">${pct(paidPct)}</span>
+            <span>Equity built: <strong>${fmt(l.purchasePrice - l.balance)}</strong></span><span style="color:var(--accent2)">${pct(paidPct)}</span>
           </div>
           <div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${paidPct}%"></div></div>
           <div style="font-size:0.75rem;color:var(--text-muted);margin-top:6px">Purchase price: ${fmt(l.purchasePrice)}</div>
         </div>` : ''}
     </div>`;
     }).join('');
+
+    document.getElementById('closeAmortBtn')?.addEventListener('click', () => {
+        document.getElementById('amortizationWrap').style.display = 'none';
+    });
 }
 
 // ─── PROJECTIONS MODULE ───────────────────────────────────────────────
@@ -924,7 +1025,7 @@ function renderDashboard() {
     const monthly = totalIncome - totalExpenses - totalLoan;
     const savingsRate = totalIncome > 0 ? Math.max(0, monthly / totalIncome * 100) : 0;
     const annualSavings = Math.max(0, monthly) * 12;
-    const equity = loans.reduce((a, l) => l.purchasePrice ? a + (l.purchasePrice - l.balance) : a, 0);
+    const equity = loans.reduce((a, l) => l.purchasePrice ? a + ((l.marketValue || l.purchasePrice) - l.balance) : a, 0);
     const netWorthNow = totalCash + equity;
 
     document.getElementById('dashNet').textContent = fmt(monthly);
@@ -947,23 +1048,38 @@ function renderDashboard() {
     ];
     document.getElementById('dashCheer').textContent = msgs[Math.floor(Math.random() * msgs.length)];
 
-    // Top expense categories
-    const topCats = EXPENSE_CATEGORIES
-        .map(c => ({ ...c, amount: expenses[c.id] || 0 }))
-        .sort((a, b) => b.amount - a.amount)
-        .slice(0, 5);
+    // Wealth growth tracker estimates (Last 3m)
+    const loHist = DB.get('history_loans', []);
+    const acHist = DB.get('history_accounts', []);
+    const threeMonthsAgo = Date.now() - (90 * 24 * 60 * 60 * 1000);
 
-    document.getElementById('dashTopExpenses').innerHTML = topCats.map(c => {
-        const w = totalExpenses > 0 ? (c.amount / totalExpenses * 100) : 0;
-        return `
-    <div style="margin-bottom:12px">
-      <div class="flex-between mb-4" style="margin-bottom:6px">
-        <span>${c.emoji} ${c.name}</span>
-        <span class="fw-800" style="color:var(--accent3)">${fmt(c.amount)}</span>
-      </div>
-      <div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${w}%;background:linear-gradient(90deg,var(--accent5),var(--accent3))"></div></div>
-    </div>`;
-    }).join('');
+    // Filter history for last 3 months
+    const recentLoans = loHist.filter(h => h.ts > threeMonthsAgo);
+    const recentAccounts = acHist.filter(h => h.ts > threeMonthsAgo);
+
+    // Equity earned = Reduction in debt (balance old - balance new)
+    let equityEarned = recentLoans.reduce((a, h) => a + (parseFloat(h.old) - parseFloat(h.new)), 0);
+    // Rough interest paid = Sum of (monthly interest * months elapsed) 
+    // Since we don't have all transactions, we'll estimate based on current rates
+    let estInterest = loans.reduce((a, l) => a + ((l.balance * l.rate / 100) / 12 * 3), 0);
+
+    document.getElementById('dashEquityEarned').textContent = fmt(Math.max(0, equityEarned));
+    document.getElementById('dashInterestPaid').textContent = fmt(estInterest);
+
+    // Balance trend
+    if (recentAccounts.length > 1) {
+        const sorted = [...recentAccounts].sort((a, b) => a.ts - b.ts);
+        const oldB = sorted[0].old;
+        const newB = sorted[sorted.length - 1].new;
+        const diff = newB - oldB;
+        document.getElementById('dashBalanceTrend').innerHTML = `
+            <span class="${diff >= 0 ? 'positive' : 'negative'}">
+                ${diff >= 0 ? '📈 Up' : '📉 Down'} ${fmt(Math.abs(diff))}
+            </span> in last 90 days.
+        `;
+    } else {
+        document.getElementById('dashBalanceTrend').textContent = 'More data needed (min 2 updates)';
+    }
 }
 
 // ─── HISTORY TOGGLE HELPER ────────────────────────────────────────────

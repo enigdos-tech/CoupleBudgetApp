@@ -312,9 +312,24 @@
 
                 <div class="two-col">
                     <div class="card">
-                        <div class="card-title">📊 Top Spending Categories</div>
-                        <div id="dashTopExpenses">
-                            <p class="text-muted text-sm">Add expenses to see breakdown 👆</p>
+                        <div class="card-title">💎 Wealth Growth Tracker (Last 3m)</div>
+                        <div id="wealthTracker">
+                            <div class="cards-grid" style="grid-template-columns:1fr 1fr;gap:12px;margin-bottom:0">
+                                <div class="stat-card" style="padding:12px;background:rgba(52,211,153,0.05)">
+                                    <div class="stat-label" style="font-size:0.75rem">Equity Earned</div>
+                                    <div class="stat-value positive" id="dashEquityEarned" style="font-size:1.1rem">$0
+                                    </div>
+                                </div>
+                                <div class="stat-card" style="padding:12px;background:rgba(239,68,68,0.05)">
+                                    <div class="stat-label" style="font-size:0.75rem">Interest Paid</div>
+                                    <div class="stat-value negative" id="dashInterestPaid" style="font-size:1.1rem">$0
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="balanceTrend" style="margin-top:16px;font-size:0.85rem">
+                                <p class="text-muted">Bank Balance Trend: <span id="dashBalanceTrend">Checking
+                                        data...</span></p>
+                            </div>
                         </div>
                     </div>
                     <div class="card">
@@ -574,6 +589,11 @@
                                             type="number" min="0" />
                                     </div>
                                     <div class="form-group">
+                                        <label class="form-label">Est. Market Value (CA$)</label>
+                                        <input class="form-input" id="marketValue" placeholder="e.g. 850000"
+                                            type="number" min="0" />
+                                    </div>
+                                    <div class="form-group">
                                         <label class="form-label">Amortization (years)</label>
                                         <input class="form-input" id="amortization" placeholder="25" type="number"
                                             min="1" max="30" />
@@ -599,6 +619,30 @@
                 </div>
 
                 <div id="loanList"></div>
+
+                <!-- Amortization Schedule Modal/Area -->
+                <div id="amortizationWrap" style="display:none;margin-top:24px">
+                    <div class="card">
+                        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+                            <div class="card-title" id="amortTitle">📅 Amortization Schedule</div>
+                            <button class="btn btn-ghost btn-sm" id="closeAmortBtn">✕ Close</button>
+                        </div>
+                        <div style="overflow-x:auto">
+                            <table class="import-table" style="min-width:600px">
+                                <thead>
+                                    <tr>
+                                        <th>Period</th>
+                                        <th>Payment</th>
+                                        <th>Principal</th>
+                                        <th>Interest</th>
+                                        <th>Balance</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="amortTbody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
             </section>
 
             <!-- ════════════════════════════════════════════════════════════════
