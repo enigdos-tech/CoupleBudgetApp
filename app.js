@@ -652,6 +652,8 @@ function saveLoan(e) {
         loan.marketValue = parseFloat(document.getElementById('marketValue').value) || 0;
         loan.frequency = document.getElementById('paymentFreq').value;
         loan.amortization = parseInt(document.getElementById('amortization').value) || 25;
+        loan.startDate = document.getElementById('loanStartDate').value;
+        loan.origAmount = parseFloat(document.getElementById('loanOrigAmount').value) || 0;
     }
     loans.push(loan);
     DB.set('loans', loans);
@@ -757,8 +759,11 @@ function renderLoanList() {
 
     container.innerHTML = loans.map(l => {
         const paidPct = l.purchasePrice ? Math.min(100, ((l.purchasePrice - l.balance) / l.purchasePrice * 100)) : 0;
-        const monthsLeft = l.monthly > 0 ? Math.ceil(l.balance / l.monthly) : 0;
+        const marketEquity = (l.marketValue || l.purchasePrice) - l.balance;
+        const marketEquityPct = l.marketValue ? Math.min(100, (marketEquity / l.marketValue * 100)) : paidPct;
         const interest = ((l.balance * l.rate / 100) / 12).toFixed(0);
+        const principalPaid = l.origAmount ? (l.origAmount - l.balance) : 0;
+
         return `
     <div class="loan-card">
       <div class="loan-card-header">
@@ -774,23 +779,30 @@ function renderLoanList() {
           <button class="btn btn-danger btn-sm" onclick="deleteLoan(${l.id})">✕</button>
         </div>
       </div>
+      
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px">
-        <div class="loan-stat"><div class="loan-stat-val" style="color:var(--danger)">${fmt(l.balance)}</div><div class="loan-stat-lbl">Balance</div></div>
+        <div class="loan-stat"><div class="loan-stat-val" style="color:var(--danger)">${fmt(l.balance)}</div><div class="loan-stat-lbl">Remaining Balance</div></div>
         <div class="loan-stat"><div class="loan-stat-val" style="color:var(--accent3)">${l.rate}%</div><div class="loan-stat-lbl">Interest Rate</div></div>
-        <div class="loan-stat"><div class="loan-stat-val" style="color:var(--accent2)">${fmt(l.monthly)}</div><div class="loan-stat-lbl">Monthly Pay</div></div>
+        <div class="loan-stat"><div class="loan-stat-val" style="color:var(--accent2)">${fmt(l.monthly)}</div><div class="loan-stat-lbl">${l.frequency || 'Monthly'} Pay</div></div>
         <div class="loan-stat"><div class="loan-stat-val" style="color:var(--primary)">${fmt(interest)}</div><div class="loan-stat-lbl">Monthly Interest</div></div>
-        ${l.term ? `<div class="loan-stat"><div class="loan-stat-val" style="color:var(--accent4)">${l.term} yr</div><div class="loan-stat-lbl">Term</div></div>` : ''}
-        ${monthsLeft ? `<div class="loan-stat"><div class="loan-stat-val">${monthsLeft} mo</div><div class="loan-stat-lbl">Est. Left</div></div>` : ''}
-        ${l.amortization ? `<div class="loan-stat"><div class="loan-stat-val">${l.amortization} yr</div><div class="loan-stat-lbl">Amortization</div></div>` : ''}
-        ${l.frequency ? `<div class="loan-stat"><div class="loan-stat-val" style="font-size:0.85rem">${l.frequency}</div><div class="loan-stat-lbl">Pay Frequency</div></div>` : ''}
+        
+        ${l.startDate ? `<div class="loan-stat"><div class="loan-stat-val" style="font-size:0.85rem">${l.startDate}</div><div class="loan-stat-lbl">🏷️ Start Date</div></div>` : ''}
+        ${l.origAmount ? `<div class="loan-stat"><div class="loan-stat-val" style="color:var(--accent1)">${fmt(l.origAmount)}</div><div class="loan-stat-lbl">📜 Orig. Mortgage</div></div>` : ''}
+        ${principalPaid > 0 ? `<div class="loan-stat"><div class="loan-stat-val" style="color:var(--positive)">${fmt(principalPaid)}</div><div class="loan-stat-lbl">📉 Principal Paid</div></div>` : ''}
+        ${l.marketValue ? `<div class="loan-stat"><div class="loan-stat-val" style="color:var(--accent5)">${fmt(l.marketValue)}</div><div class="loan-stat-lbl">💎 Current Value</div></div>` : ''}
       </div>
+
       ${l.purchasePrice ? `
-        <div class="loan-progress" style="margin-top:15px">
+        <div class="loan-progress" style="margin-top:15px; background: rgba(255,255,255,0.02); padding: 12px; border-radius: 12px; border: 1px solid var(--card-border)">
           <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:0.78rem;color:var(--text-muted)">
-            <span>Equity built: <strong>${fmt(l.purchasePrice - l.balance)}</strong></span><span style="color:var(--accent2)">${pct(paidPct)}</span>
+            <span>Total Market Equity: <strong style="color:var(--positive)">${fmt(marketEquity)}</strong></span>
+            <span style="color:var(--accent2)">${pct(marketEquityPct)} Property Ownership</span>
           </div>
-          <div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${paidPct}%"></div></div>
-          <div style="font-size:0.75rem;color:var(--text-muted);margin-top:6px">Purchase price: ${fmt(l.purchasePrice)}</div>
+          <div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${marketEquityPct}%"></div></div>
+          <div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px; display:flex; justify-content:space-between">
+            <span>Purchase Price: ${fmt(l.purchasePrice)}</span>
+            <span>Amortization: ${l.amortization || 25} yrs left</span>
+          </div>
         </div>` : ''}
     </div>`;
     }).join('');
