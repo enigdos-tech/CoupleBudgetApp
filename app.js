@@ -112,7 +112,7 @@ const ONBOARDING = (() => {
 })();
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────
-const EXPENSE_CATEGORIES = [
+const DEFAULT_EXPENSE_CATEGORIES = [
     { id: 'housing', emoji: '🏠', name: 'Housing', desc: 'Condo fees, maintenance, insurance' },
     { id: 'groceries', emoji: '🛒', name: 'Groceries & Supplies', desc: 'Food, household items, cleaning' },
     { id: 'transport', emoji: '🚗', name: 'Transportation', desc: 'Car payment, gas, transit, parking' },
@@ -124,6 +124,10 @@ const EXPENSE_CATEGORIES = [
     { id: 'education', emoji: '📚', name: 'Education & Growth', desc: 'Courses, books, professional development' },
     { id: 'kidsAndPets', emoji: '🐾', name: 'Kids & Pets', desc: 'Pet care, childcare, activities, supplies' },
 ];
+
+function getExpenseCategories() {
+    return DB.get('expense_categories', DEFAULT_EXPENSE_CATEGORIES);
+}
 
 const CHEERS = [
     "You're crushing it! 🎉", "Budget goals = love goals! 💑", "High five! Keep it up! 🙌",
@@ -148,6 +152,110 @@ const DB = {
         DB.set('history_' + section, hist);
     }
 };
+
+// ─── AI ADVISOR ENGINE ───────────────────────────────────────────────
+const ADVISOR_ENGINE = (() => {
+    const INFLATION = 0.025;
+    const DEFAULT_RETURN = 0.05;
+
+    function getFinancialContext() {
+        const income = DB.get('income', { p1Amount: 0, p2Amount: 0 });
+        const expenses = DB.get('expenses', {});
+        const loans = DB.get('loans', []);
+        const accounts = DB.get('accounts', []);
+
+        const totalIncome = (income.p1Amount || 0) + (income.p2Amount || 0);
+        const totalExpenses = Object.values(expenses).reduce((a, b) => a + (b || 0), 0);
+        const totalLoanPayments = loans.reduce((a, l) => a + (l.monthly || 0), 0);
+        const totalCash = accounts.reduce((a, acc) => a + (acc.balance || 0), 0);
+        const totalDebt = loans.reduce((a, l) => a + (l.balance || 0), 0);
+        const equity = loans.reduce((a, l) => l.purchasePrice ? a + (l.purchasePrice - l.balance) : a, 0);
+        const netWorth = totalCash + equity;
+
+        return {
+            totalIncome, totalExpenses, totalLoanPayments,
+            totalCash, totalDebt, netWorth,
+            loans, income, p1Name: income.p1Name || 'Partner 1', p2Name: income.p2Name || 'Partner 2'
+        };
+    }
+
+    function runSimulation(mod = { income: 0, expense: 0, savings: 0, return: 0 }, years = 5) {
+        const ctx = getFinancialContext();
+        const baseIncome = ctx.totalIncome * (1 + mod.income);
+        const baseExpenses = ctx.totalExpenses * (1 + mod.expense);
+        const returnRate = DEFAULT_RETURN + mod.return;
+
+        let netWorthStart = ctx.loans.reduce((a, l) => l.purchasePrice ? a + (l.purchasePrice - l.balance) : a, 0);
+        let debt = ctx.totalDebt;
+        let savings = ctx.totalCash;
+
+        for (let m = 1; m <= years * 12; m++) {
+            const yr = Math.floor((m - 1) / 12);
+            const monthExp = baseExpenses * Math.pow(1 + INFLATION, yr);
+            const monthlySavings = baseIncome - monthExp - ctx.totalLoanPayments + mod.savings;
+            savings += Math.max(0, monthlySavings);
+            savings *= (1 + returnRate / 12);
+
+            const loanPrincipal = ctx.loans.reduce((a, l) => {
+                const int = l.balance > 0 ? (l.balance * l.rate / 100 / 12) : 0;
+                return a + Math.max(0, (l.monthly || 0) - int);
+            }, 0);
+            debt = Math.max(0, debt - loanPrincipal);
+        }
+        return savings + (netWorthStart * (1 + INFLATION * years));
+    }
+
+    const RESPONSES = {
+        GREETING: (ctx) => `Hey there! I'm your CouplesBudget AI. 💑 I see a monthly household income of ${fmt(ctx.totalIncome)} and your net worth today is ${fmt(ctx.netWorth)}. What's on your mind?`,
+        NET_WORTH: (ctx) => `Your total net worth is ${fmt(ctx.netWorth)}. This includes ${fmt(ctx.totalCash)} in cash/accounts and ${fmt(ctx.netWorth - ctx.totalCash)} in home equity/assets. You're doing great! 🚀`,
+        EXPENSES: (ctx) => `You're spending ${fmt(ctx.totalExpenses)} on life each month, plus ${fmt(ctx.totalLoanPayments)} in loan payments. That's a total outflow of ${fmt(ctx.totalExpenses + ctx.totalLoanPayments)}.`,
+        RAISE: (ctx, pName, pct) => {
+            if (ctx.totalIncome === 0) return `I'd love to calculate that, but it looks like you haven't added any income yet! 💸 Head over to the Income tab first so I can see what a ${pct}% raise would do for you.`;
+            const res = runSimulation({ income: pct / 100, expense: 0, savings: 0, return: 0 }, 5);
+            return `If ${pName} gets a ${pct}% raise, your household income jumps to ${fmt(ctx.totalIncome * (1 + pct / 100))}. In 5 years, your net worth could hit ${fmt(res)}! 💰`;
+        },
+        BABY: (ctx) => {
+            const res = runSimulation({ income: 0, expense: 0.15, savings: 0, return: 0 }, 5);
+            return `Adding a little one? 👶 Typically, expenses might rise by ~15%. If your monthly spending hits ${fmt(ctx.totalExpenses * 1.15)}, your 5-year projection would be ${fmt(res)}. Canada Child Benefit (CCB) might help too! 🇨🇦`;
+        },
+        HOUSE: (ctx) => {
+            if (ctx.totalCash < 50000) return `A house in Canada usually needs a good down payment. You have ${fmt(ctx.totalCash)} right now—aiming for $50k-$100k would really help with those interest rates! 🏠`;
+            return `With ${fmt(ctx.totalCash)} in the bank, you're in a strong position for a down payment! Remember to factor in closing costs and property taxes. 🏗️`;
+        },
+        SAVINGS: (ctx, amount) => {
+            const res = runSimulation({ income: 0, expense: 0, savings: amount, return: 0 }, 5);
+            return `Squeezing out an extra ${fmt(amount)} a month is huge! 🏝️ Over 5 years, that extra discipline adds up to a projected net worth of ${fmt(res)}.`;
+        },
+        DEFAULT: () => `That's a great question! I'm still learning, but I can definitely help with "what-if" scenarios for income, raises, or big life changes like a baby or a house. Try one of those! ✨`
+    };
+
+    return {
+        process(query) {
+            const ctx = getFinancialContext();
+            const q = query.toLowerCase().replace(/^(what if|how about|tell me if) /i, '').trim();
+
+            if (q.includes('net worth') || q.includes('how much money')) return RESPONSES.NET_WORTH(ctx);
+            if (q.includes('expense') || q.includes('spending') || q.includes('outflow')) return RESPONSES.EXPENSES(ctx);
+
+            const raiseMatch = q.match(/(.+) gets a (\d+)% raise/i);
+            if (raiseMatch) {
+                let name = raiseMatch[1].trim();
+                name = name.charAt(0).toUpperCase() + name.slice(1);
+                return RESPONSES.RAISE(ctx, name, parseInt(raiseMatch[2]));
+            }
+
+            if (q.includes('baby') || q.includes('child')) return RESPONSES.BABY(ctx);
+            if (q.includes('house') || q.includes('mortgage') || q.includes('home')) return RESPONSES.HOUSE(ctx);
+
+            const saveMatch = q.match(/save \$?(\d+)/i);
+            if (saveMatch) return RESPONSES.SAVINGS(ctx, parseInt(saveMatch[1]));
+
+            if (q.includes('hello') || q.includes('hi')) return RESPONSES.GREETING(ctx);
+
+            return RESPONSES.DEFAULT();
+        }
+    };
+})();
 
 
 // ─── UTILS ────────────────────────────────────────────────────────────
@@ -260,26 +368,189 @@ function renderIncomeHistoryPanel() {
 // ─── EXPENSES MODULE ──────────────────────────────────────────────────
 function initExpenses() {
     const expenses = DB.get('expenses', {});
+    const categories = getExpenseCategories();
     const container = document.getElementById('expenseList');
-    container.innerHTML = EXPENSE_CATEGORIES.map(cat => `
-    <div class="expense-item" id="exp-row-${cat.id}">
-      <div style="display:flex;align-items:center;flex:1">
-        <span class="expense-emoji">${cat.emoji}</span>
-        <div>
-          <div class="expense-name">${cat.name}</div>
-          <div class="expense-desc">${cat.desc}</div>
+
+    container.innerHTML = categories.map(cat => `
+        <div class="expense-item" id="exp-row-${cat.id}">
+          <div style="display:flex;align-items:center;flex:1">
+            <span class="expense-emoji">${cat.emoji || '📦'}</span>
+            <div>
+              <div class="expense-name">${cat.name}</div>
+              <div class="expense-desc">${cat.desc || ''}</div>
+            </div>
+          </div>
+          <div class="expense-input-wrap">
+            <span style="color:var(--text-muted);font-size:0.9rem">CA$</span>
+            <input class="expense-input" id="exp-${cat.id}" type="number" min="0" placeholder="0"
+                   value="${expenses[cat.id] || ''}" onchange="saveExpense('${cat.id}','${cat.name}')" />
+          </div>
         </div>
-      </div>
-      <div class="expense-input-wrap">
-        <span style="color:var(--text-muted);font-size:0.9rem">CA$</span>
-        <input class="expense-input" id="exp-${cat.id}" type="number" min="0" placeholder="0"
-               value="${expenses[cat.id] || ''}" onchange="saveExpense('${cat.id}','${cat.name}')" />
-      </div>
-    </div>
-  `).join('');
+    `).join('');
+
     updateExpenseSummary();
     renderExpenseHistoryPanel();
     setupHistoryToggle('expenseHistoryToggle', 'expenseHistoryList');
+
+    // Setup listeners for special features (Bank Import & Categories)
+    document.getElementById('importBankBtn')?.addEventListener('click', () => document.getElementById('bankFileInput').click());
+    document.getElementById('bankFileInput')?.addEventListener('change', handleBankFileUpload);
+    document.getElementById('manageCategoriesBtn')?.addEventListener('click', showCategoryManager);
+
+    // Modal Close listeners
+    document.getElementById('importModalClose')?.addEventListener('click', () => document.getElementById('importModal').style.display = 'none');
+    document.getElementById('importModalCancel')?.addEventListener('click', () => document.getElementById('importModal').style.display = 'none');
+    document.getElementById('categoryModalClose')?.addEventListener('click', () => document.getElementById('categoryModal').style.display = 'none');
+    document.getElementById('saveCategoriesBtn')?.addEventListener('click', saveCategoryConfig);
+    document.getElementById('addNewCategoryBtn')?.addEventListener('click', addBlankCategory);
+    document.getElementById('finalizeImportBtn')?.addEventListener('click', finalizeTransactionImport);
+}
+
+// ─── BANK IMPORT LOGIC ────────────────────────────────────────────────
+let pendingTransactions = [];
+
+function handleBankFileUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function (event) {
+        const text = event.target.result;
+        parseCSV(text);
+    };
+    reader.readAsText(file);
+    e.target.value = ''; // Reset input
+}
+
+function parseCSV(text) {
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+    if (lines.length < 2) return showToast('Empty or invalid CSV file.');
+
+    // Simple heuristic: find headers
+    const rows = lines.map(line => {
+        // Handle basic commas, not full RFC (good enough for most bank exports)
+        return line.split(',').map(cell => cell.replace(/^["']|["']$/g, '').trim());
+    });
+
+    const headers = rows[0].map(h => h.toLowerCase());
+    const dateIdx = headers.findIndex(h => h.includes('date'));
+    const descIdx = headers.findIndex(h => h.includes('desc') || h.includes('memo') || h.includes('name'));
+    const amtIdx = headers.findIndex(h => h.includes('amount') || h.includes('val') || h.includes('price'));
+
+    if (amtIdx === -1 || descIdx === -1) {
+        return showToast('Could not find Amount or Description columns in CSV.');
+    }
+
+    pendingTransactions = [];
+    rows.slice(1).forEach(row => {
+        let amt = parseFloat(row[amtIdx].replace(/[$,]/g, '')) || 0;
+        // In most bank exports, spending is negative or marked specifically. 
+        // We'll treat all non-zero as potential expenses for review.
+        if (amt === 0) return;
+
+        pendingTransactions.push({
+            id: 'tx-' + Math.random().toString(36).substr(2, 9),
+            date: dateIdx !== -1 ? row[dateIdx] : 'N/A',
+            desc: row[descIdx],
+            amount: Math.abs(amt), // Store absolute, user will pick
+            category: 'housing' // Default
+        });
+    });
+
+    renderImportTable();
+    document.getElementById('importModal').style.display = 'flex';
+}
+
+function renderImportTable() {
+    const categories = getExpenseCategories();
+    const tbody = document.getElementById('importTbody');
+    tbody.innerHTML = pendingTransactions.map(tx => `
+        <tr>
+            <td><div style="font-size:0.75rem;color:var(--text-muted)">${tx.date}</div></td>
+            <td><strong>${tx.desc}</strong></td>
+            <td><span style="color:var(--danger)">${fmt(tx.amount)}</span></td>
+            <td>
+                <select class="form-select btn-sm" style="padding:4px 8px;font-size:0.8rem" onchange="updateTxCategory('${tx.id}', this.value)">
+                    ${categories.map(c => `<option value="${c.id}" ${tx.category === c.id ? 'selected' : ''}>${c.emoji} ${c.name}</option>`).join('')}
+                </select>
+            </td>
+            <td><button class="btn btn-ghost btn-sm" onclick="removeTx('${tx.id}')">❌</button></td>
+        </tr>
+    `).join('');
+}
+
+window.updateTxCategory = (id, cat) => {
+    const tx = pendingTransactions.find(t => t.id === id);
+    if (tx) tx.category = cat;
+};
+
+window.removeTx = (id) => {
+    pendingTransactions = pendingTransactions.filter(t => t.id !== id);
+    renderImportTable();
+};
+
+function finalizeTransactionImport() {
+    const expenses = DB.get('expenses', {});
+    const categories = getExpenseCategories();
+
+    // Group totals by category
+    const totals = {};
+    pendingTransactions.forEach(tx => {
+        totals[tx.category] = (totals[tx.category] || 0) + tx.amount;
+    });
+
+    // Merge into current budget
+    Object.keys(totals).forEach(catId => {
+        const cat = categories.find(c => c.id === catId);
+        const name = cat ? cat.name : 'Unknown';
+        const oldVal = expenses[catId] || 0;
+        const newVal = oldVal + totals[catId];
+
+        expenses[catId] = newVal;
+        DB.pushHistory('expenses', `Import: ${name}`, oldVal, newVal);
+    });
+
+    DB.set('expenses', expenses);
+    document.getElementById('importModal').style.display = 'none';
+    initExpenses(); // Re-render main list
+    showToast(`Successfully imported ${pendingTransactions.length} transactions! 🎊`);
+}
+
+// ─── CATEGORY MANAGEMENT ──────────────────────────────────────────────
+let tempCategories = [];
+
+function showCategoryManager() {
+    tempCategories = JSON.parse(JSON.stringify(getExpenseCategories()));
+    renderCategoryEditList();
+    document.getElementById('categoryModal').style.display = 'flex';
+}
+
+function renderCategoryEditList() {
+    const wrap = document.getElementById('categoryEditList');
+    wrap.innerHTML = tempCategories.map((c, i) => `
+        <div class="category-edit-item">
+            <input type="text" class="form-input" style="width:50px;text-align:center" value="${c.emoji || '📦'}" onchange="updateCatProp(${i}, 'emoji', this.value)">
+            <input type="text" class="form-input" value="${c.name}" placeholder="Category Name" onchange="updateCatProp(${i}, 'name', this.value)">
+            <button class="btn btn-ghost btn-sm" onclick="deleteCategory(${i})">🗑️</button>
+        </div>
+    `).join('');
+}
+
+window.updateCatProp = (idx, prop, val) => { tempCategories[idx][prop] = val; };
+window.deleteCategory = (idx) => { tempCategories.splice(idx, 1); renderCategoryEditList(); };
+
+function addBlankCategory() {
+    tempCategories.push({ id: 'custom_' + Date.now(), emoji: '📦', name: '', desc: '' });
+    renderCategoryEditList();
+}
+
+function saveCategoryConfig() {
+    // Validate: filter out empty names
+    const final = tempCategories.filter(c => c.name.trim());
+    DB.set('expense_categories', final);
+    document.getElementById('categoryModal').style.display = 'none';
+    initExpenses();
+    showToast('Expense categories updated! 🚀');
 }
 
 function saveExpense(id, name) {
@@ -519,94 +790,69 @@ function renderProjections() {
     });
 }
 
-// ─── SIMULATOR MODULE ─────────────────────────────────────────────────
-let simChart = null;
+// ─── AI ADVISOR MODULE ───────────────────────────────────────────────
+function initAIAdvisor() {
+    const form = document.getElementById('aiChatForm');
+    const input = document.getElementById('aiChatInput');
+    const history = document.getElementById('aiChatHistory');
+    const suggestions = document.getElementById('aiSuggestions');
 
-function renderSimulator() {
-    updateSimResults();
-}
+    if (!form) return;
 
-function getSimInputs() {
-    return {
-        incomeMod: parseFloat(document.getElementById('simIncome').value) / 100,
-        expenseMod: parseFloat(document.getElementById('simExpense').value) / 100,
-        returnMod: parseFloat(document.getElementById('simReturn').value) / 100,
-        extraSavings: parseFloat(document.getElementById('simExtra').value) || 0,
-    };
-}
+    form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const query = input.value.trim();
+        if (!query) return;
 
-function updateSimResults() {
-    const sim = getSimInputs();
-    const income = DB.get('income', { p1Amount: 0, p2Amount: 0 });
-    const totalIncome = ((income.p1Amount || 0) + (income.p2Amount || 0)) * (1 + sim.incomeMod);
-    const expenses = DB.get('expenses', {});
-    const totalExpenses = Object.values(expenses).reduce((a, b) => a + (b || 0), 0) * (1 + sim.expenseMod);
-    const loans = DB.get('loans', []);
-    const totalLoanPayments = loans.reduce((a, l) => a + (l.monthly || 0), 0);
-    const returnRate = 0.05 + sim.returnMod;
-    const INFLATION = 0.025;
+        addChatMessage('user', query);
+        input.value = '';
 
-    let netWorthStart = loans.reduce((a, l) => l.purchasePrice ? a + (l.purchasePrice - l.balance) : a, 0);
+        // Bot response with typing delay
+        const typingId = addTypingIndicator();
+        setTimeout(() => {
+            removeTypingIndicator(typingId);
+            const response = ADVISOR_ENGINE.process(query);
+            addChatMessage('bot', response);
+        }, 800 + Math.random() * 1000);
+    });
 
-    function calcNW(years) {
-        let debt = loans.reduce((a, l) => a + (l.balance || 0), 0);
-        let savings = 0;
-        for (let m = 1; m <= years * 12; m++) {
-            const yr = Math.floor((m - 1) / 12);
-            const monthExp = totalExpenses * Math.pow(1 + INFLATION, yr);
-            const monthlySavings = totalIncome - monthExp - totalLoanPayments + sim.extraSavings;
-            savings += Math.max(0, monthlySavings);
-            savings *= (1 + returnRate / 12);
-            const loanPrincipal = loans.reduce((a, l) => {
-                const int = l.balance > 0 ? (l.balance * l.rate / 100 / 12) : 0;
-                return a + Math.max(0, (l.monthly || 0) - int);
-            }, 0);
-            debt = Math.max(0, debt - loanPrincipal);
-        }
-        return savings + netWorthStart + (netWorthStart * INFLATION * years);
+    suggestions.querySelectorAll('.suggestion-pill').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const query = btn.textContent.replace(/^[^ ]+ /, ''); // remove emoji
+            input.value = query;
+            form.dispatchEvent(new Event('submit'));
+        });
+    });
+
+    function addChatMessage(role, text) {
+        const msg = document.createElement('div');
+        msg.className = `ai-message ${role}`;
+        msg.innerHTML = `<div class="message-content">${text}</div>`;
+        history.appendChild(msg);
+        history.scrollTop = history.scrollHeight;
     }
 
-    const nw1 = calcNW(1), nw3 = calcNW(3), nw5 = calcNW(5);
-    document.getElementById('sim1yr').textContent = fmt(nw1);
-    document.getElementById('sim3yr').textContent = fmt(nw3);
-    document.getElementById('sim5yr').textContent = fmt(nw5);
+    function addTypingIndicator() {
+        const id = 'typing-' + Date.now();
+        const msg = document.createElement('div');
+        msg.className = 'ai-message bot';
+        msg.id = id;
+        msg.innerHTML = `
+            <div class="typing-indicator">
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            </div>
+        `;
+        history.appendChild(msg);
+        history.scrollTop = history.scrollHeight;
+        return id;
+    }
 
-    // Update slider display values
-    document.getElementById('simIncomeDisplay').textContent = (sim.incomeMod >= 0 ? '+' : '') + (sim.incomeMod * 100).toFixed(0) + '%';
-    document.getElementById('simExpenseDisplay').textContent = (sim.expenseMod >= 0 ? '+' : '') + (sim.expenseMod * 100).toFixed(0) + '%';
-    document.getElementById('simReturnDisplay').textContent = ((0.05 + sim.returnMod) * 100).toFixed(1) + '%';
-    document.getElementById('simExtraDisplay').textContent = fmt(sim.extraSavings);
-
-    // Mini bar chart
-    const ctx2 = document.getElementById('simChart').getContext('2d');
-    if (simChart) simChart.destroy();
-    simChart = new Chart(ctx2, {
-        type: 'bar',
-        data: {
-            labels: ['1 Year', '3 Years', '5 Years'],
-            datasets: [{
-                label: 'Projected Net Worth',
-                data: [nw1, nw3, nw5],
-                backgroundColor: ['rgba(167,139,250,0.6)', 'rgba(52,211,153,0.6)', 'rgba(251,191,36,0.6)'],
-                borderColor: ['#a78bfa', '#34d399', '#fbbf24'],
-                borderWidth: 2, borderRadius: 10,
-            }]
-        },
-        options: {
-            responsive: true, maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    backgroundColor: 'rgba(23,22,42,0.95)', titleColor: '#f0eeff', bodyColor: '#9d9bbf',
-                    callbacks: { label: ctx => ' ' + fmt(ctx.raw) }
-                }
-            },
-            scales: {
-                x: { ticks: { color: '#9d9bbf', font: { family: 'Outfit' } }, grid: { display: false } },
-                y: { ticks: { color: '#9d9bbf', font: { family: 'Outfit' }, callback: v => fmt(v) }, grid: { color: 'rgba(255,255,255,0.05)' } }
-            }
-        }
-    });
+    function removeTypingIndicator(id) {
+        const el = document.getElementById(id);
+        if (el) el.remove();
+    }
 }
 
 // ─── ADVICE ENGINE ────────────────────────────────────────────────────
@@ -1090,6 +1336,7 @@ function launchApp() {
     initLoans();
     initBankAccounts();
     initCheckIns();
+    initAIAdvisor();
     renderDashboard();
 
     // Projection filter
@@ -1100,11 +1347,6 @@ function launchApp() {
             document.getElementById('projFilter').value = btn.dataset.view;
             renderProjections();
         });
-    });
-
-    // Simulator sliders
-    ['simIncome', 'simExpense', 'simReturn', 'simExtra'].forEach(id => {
-        document.getElementById(id)?.addEventListener('input', updateSimResults);
     });
 
     // Close modal on backdrop click

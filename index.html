@@ -164,6 +164,56 @@
         </div>
     </div>
 
+    <!-- BANK IMPORT MODAL -->
+    <div id="importModal" class="modal-overlay">
+        <div class="modal-content" style="max-width:800px">
+            <div class="modal-header">
+                <h3>🏦 Statement Import — Review Transactions</h3>
+                <button class="btn-close" id="importModalClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="margin-bottom:15px;color:var(--text-muted)">We found these expenses. Select which ones to add
+                    to your monthly budget totals.</p>
+                <div class="import-list-wrap">
+                    <table class="import-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Description</th>
+                                <th>Amount</th>
+                                <th>Category</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="importTbody"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" id="importModalCancel">Cancel</button>
+                <button class="btn btn-primary" id="finalizeImportBtn">Apply to Budget 🚀</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MANAGE CATEGORIES MODAL -->
+    <div id="categoryModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>⚙️ Manage Expense Categories</h3>
+                <button class="btn-close" id="categoryModalClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="categoryEditList" class="category-edit-list"></div>
+                <button class="btn btn-ghost w-full" style="margin-top:10px" id="addNewCategoryBtn">➕ Add Custom
+                    Category</button>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary w-full" id="saveCategoriesBtn">Save & Refresh 💾</button>
+            </div>
+        </div>
+    </div>
+
     <!-- ── MAIN APP WRAPPER ──────────────────────────────────────────── -->
     <div id="appWrapper">
 
@@ -188,7 +238,7 @@
             <button class="tab-btn" data-tab="tab-loans">🏦 Loans</button>
             <button class="tab-btn" data-tab="tab-accounts">💳 Accounts</button>
             <button class="tab-btn" data-tab="tab-projections">📈 Projections</button>
-            <button class="tab-btn" data-tab="tab-simulator">🔮 Simulator</button>
+            <button class="tab-btn" data-tab="tab-simulator">🤖 AI Advisor</button>
             <button class="tab-btn" data-tab="tab-checkins">📍 Check-Ins</button>
             <button class="tab-btn" data-tab="tab-advice">💡 Advice</button>
         </nav>
@@ -414,6 +464,12 @@
                     </div>
                 </div>
 
+                <div class="action-bar" style="margin-bottom:20px;display:flex;gap:12px">
+                    <button class="btn btn-primary" id="importBankBtn">📂 Import Bank Statement</button>
+                    <button class="btn btn-ghost" id="manageCategoriesBtn">⚙️ Manage Categories</button>
+                    <input type="file" id="bankFileInput" style="display:none" accept=".csv">
+                </div>
+
                 <div class="card">
                     <div class="card-title">📋 Expense Categories — tap to update any amount</div>
                     <div id="expenseList"></div>
@@ -589,92 +645,42 @@
                         <div class="stat-icon">🏠</div>
                         <div class="stat-label">Property Growth</div>
                         <div class="stat-value" style="font-size:1.2rem;color:var(--accent2)">2.5% / yr</div>
-                        <div class="stat-sub">Estimated value increase</div>
                     </div>
                 </div>
             </section>
 
             <!-- ════════════════════════════════════════════════════════════════
-         TAB 6 — SCENARIO SIMULATOR
+         TAB 6 — AI FINANCIAL ADVISOR
     ═══════════════════════════════════════════════════════════════════ -->
             <section class="tab-panel" id="tab-simulator">
                 <div class="page-header">
-                    <h2>🔮 Scenario Simulator</h2>
-                    <p>Play with different life scenarios! Adjust sliders and see your net worth change instantly 🎮</p>
+                    <h2>🤖 AI Financial Advisor</h2>
+                    <p>Ask questions about your budget, test "what-if" scenarios, or get Canadian financial tips ✨</p>
                 </div>
 
-                <div class="happy-banner">
-                    <span class="cheer">🧪</span>
-                    <span>This is a sandbox — changes here don't affect your real data. Dream away! 💫</span>
-                </div>
-
-                <div class="two-col">
-                    <!-- Sliders -->
-                    <div class="card">
-                        <div class="card-title">🎛️ Adjust Scenarios</div>
-
-                        <div class="slider-group">
-                            <div class="slider-label">📈 Income Change <span id="simIncomeDisplay">+0%</span></div>
-                            <input type="range" id="simIncome" min="-30" max="100" value="0" step="5" />
-                            <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px">Simulate a raise, job
-                                change, or one partner stopping work</div>
-                        </div>
-
-                        <div class="slider-group">
-                            <div class="slider-label">💸 Expense Change <span id="simExpenseDisplay">+0%</span></div>
-                            <input type="range" id="simExpense" min="-40" max="60" value="0" step="5" />
-                            <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px">What if you cut
-                                subscriptions, moved, or had a baby?</div>
-                        </div>
-
-                        <div class="slider-group">
-                            <div class="slider-label">📊 Investment Return <span id="simReturnDisplay">5.0%</span></div>
-                            <input type="range" id="simReturn" min="-4" max="10" value="0" step="0.5" />
-                            <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px">Conservative (3%) to
-                                aggressive (10%+) investing</div>
-                        </div>
-
-                        <div class="slider-group">
-                            <div class="slider-label">➕ Extra Monthly Savings <span id="simExtraDisplay">$0</span></div>
-                            <input type="range" id="simExtra" min="0" max="3000" value="0" step="100" />
-                            <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px">Could you squeeze out
-                                an extra $500/month?</div>
-                        </div>
-
-                        <div
-                            style="margin-top:16px;padding:14px;background:rgba(167,139,250,0.08);border-radius:10px;font-size:0.82rem;color:var(--text-muted)">
-                            🎯 Try: +20% income, -10% expenses, 7% return → watch it compound!
-                        </div>
-                    </div>
-
-                    <!-- Results -->
-                    <div>
-                        <div style="display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:20px">
-                            <div class="sim-result-card y1">
-                                <div class="sim-year">📅 1 Year Net Worth</div>
-                                <div class="sim-value y1" id="sim1yr">$0</div>
-                                <div class="sim-label">Based on your scenario</div>
-                            </div>
-                            <div class="sim-result-card y3">
-                                <div class="sim-year">📅 3 Year Net Worth</div>
-                                <div class="sim-value y3" id="sim3yr">$0</div>
-                                <div class="sim-label">With compounding growth</div>
-                            </div>
-                            <div class="sim-result-card y5">
-                                <div class="sim-year">📅 5 Year Net Worth</div>
-                                <div class="sim-value y5" id="sim5yr">$0</div>
-                                <div class="sim-label">Your wealth potential</div>
+                <div class="ai-chat-container">
+                    <div id="aiChatHistory" class="ai-chat-history">
+                        <div class="ai-message bot">
+                            <div class="message-content">
+                                Hello! I'm your CouplesBudget AI. 💑 I've analyzed your data and I'm ready to help you
+                                plan your future. Try asking me "How's our net worth looking?" or "What if Alex gets a
+                                10% raise?"
                             </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- Simulator chart -->
-                <div class="card mt-6">
-                    <div class="card-title">📊 Net Worth at Each Milestone</div>
-                    <div class="chart-container" style="height:260px">
-                        <canvas id="simChart"></canvas>
+                    <div class="chat-suggestions" id="aiSuggestions">
+                        <button class="suggestion-pill">📈 How's our net worth looking?</button>
+                        <button class="suggestion-pill">👶 What if we have a baby?</button>
+                        <button class="suggestion-pill">🏠 Can we afford a house?</button>
+                        <button class="suggestion-pill">🏝️ Can we save $500 more?</button>
                     </div>
+
+                    <form id="aiChatForm" class="ai-chat-input-row">
+                        <input type="text" id="aiChatInput" class="form-input"
+                            placeholder="Ask me anything about your finances..." autocomplete="off">
+                        <button type="submit" class="btn btn-primary">Send 🚀</button>
+                    </form>
                 </div>
             </section>
 
@@ -684,7 +690,8 @@
             <section class="tab-panel" id="tab-advice">
                 <div class="page-header">
                     <h2>💡 Personalized Money Advice</h2>
-                    <p>Based on your data — smart, tailored tips to maximize your financial happiness 🇨🇦</p>
+                    <p>Based on your data — smart, tailored tips to maximize your financial happiness 🇨🇦
+                    </p>
                 </div>
 
                 <div class="happy-banner">
@@ -706,7 +713,8 @@
             <section class="tab-panel" id="tab-accounts">
                 <div class="page-header">
                     <h2>💳 Bank Accounts & Net Worth</h2>
-                    <p>Track all accounts in one place: chequing, savings, TFSA, RRSP, investments & more 🇨🇦</p>
+                    <p>Track all accounts in one place: chequing, savings, TFSA, RRSP, investments & more
+                        🇨🇦</p>
                 </div>
 
                 <div class="cards-grid"
@@ -786,7 +794,8 @@
                             </div>
                             <div style="display:flex;gap:10px">
                                 <button type="submit" class="btn btn-success">✅ Add Account</button>
-                                <button type="button" class="btn btn-ghost" id="cancelAccountBtn">✕ Cancel</button>
+                                <button type="button" class="btn btn-ghost" id="cancelAccountBtn">✕
+                                    Cancel</button>
                             </div>
                         </form>
                     </div>
@@ -806,12 +815,14 @@
             <section class="tab-panel" id="tab-checkins">
                 <div class="page-header">
                     <h2>📍 Progress Check-Ins</h2>
-                    <p>Schedule future financial milestones and log actual vs projected — catch deviations early! 🎯</p>
+                    <p>Schedule future financial milestones and log actual vs projected — catch deviations
+                        early! 🎯</p>
                 </div>
 
                 <div class="happy-banner">
                     <span class="cheer">📅</span>
-                    <span>6 milestones auto-generated from today! Log actuals at each date to see if you're ahead or
+                    <span>6 milestones auto-generated from today! Log actuals at each date to see if you're
+                        ahead or
                         behind — celebrate the wins! 🎉</span>
                 </div>
 
@@ -857,7 +868,8 @@
                             </div>
                             <div style="display:flex;gap:10px">
                                 <button type="submit" class="btn btn-success">✅ Schedule</button>
-                                <button type="button" class="btn btn-ghost" id="cancelCheckInBtn">✕ Cancel</button>
+                                <button type="button" class="btn btn-ghost" id="cancelCheckInBtn">✕
+                                    Cancel</button>
                             </div>
                         </form>
                     </div>
